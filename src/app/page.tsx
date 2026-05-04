@@ -288,30 +288,26 @@ export default function Page() {
     }, 500);
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 300,
-          system: `Sen bir kamu yatırım risk analiz sistemisin. Verilen parametreler için JSON formatında sonuç üret. 
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      if (!apiKey) throw new Error("GEMINI_API_KEY tanımlı değil, fallback'e düşülüyor.");
+
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: { responseMimeType: "application/json" },
+      });
+
+      const prompt = `Sen bir kamu yatırım risk analiz sistemisin. Verilen parametreler için JSON formatında sonuç üret.
 Sadece şu formatta JSON dön, başka hiçbir şey yazma:
 {"risk": <0-100 arası integer>, "impact": <0-100 arası integer>, "decision": <"ONAYLANDI" | "REVİZE EDİLMELİ" | "RET">, "decisionCode": <"APR-XXXX" | "REV-XXXX" | "RJT-XXXX">}
-
-Mantıklı değerler üret: yüksek bütçe ve uzun süre düşük riski; düşük bütçe kısa süre yüksek riski gösterir.`,
-          messages: [
-            {
-              role: "user",
-              content: `Şehir: ${selectedCity.name}, İlçe: ${selectedDistrict}, Bütçe: ${budget}M TL, Süre: ${duration} ay. Risk analizi yap.`,
-            },
-          ],
-        }),
-      });
+Mantıklı değerler üret: yüksek bütçe ve uzun süre düşük riski; düşük bütçe kısa süre yüksek riski gösterir.
+Şehir: ${selectedCity.name}, İlçe: ${selectedDistrict}, Bütçe: ${budget}M TL, Süre: ${duration} ay.`;
 
       if (intervalRef.current) clearInterval(intervalRef.current);
 
-      const data = await response.json();
-      const text = data.content?.[0]?.text || "{}";
+      const geminiResult = await model.generateContent(prompt);
+      const text = geminiResult.response.text();
       const clean = text.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(clean);
 
